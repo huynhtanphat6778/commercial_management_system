@@ -1,0 +1,41 @@
+# Chi chay SQL Server 2022 cho moi truong phat trien.
+# Backend va frontend chay truc tiep bang npm trong VS Code.
+# Dockerfile cho backend/frontend se them o Task 17.
+#
+# Yeu cau: Docker Desktop, may con it nhat 2 GB RAM trong cho container.
+# Mat khau SA phai du manh (>= 8 ky tu, co it nhat 3 trong 4 nhom: HOA, thuong, so, ky tu dac biet).
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fashion_shop_db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-ShopDev2026Pass}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Chay 1 lan: tao database fashion_shop neu chua co (SQL Server khong tu tao).
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-ShopDev2026Pass}
+    restart: "no"
+    command:
+      - /bin/sh
+      - -c
+      - /opt/mssql-tools18/bin/sqlcmd -C -S db -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('fashion_shop') IS NULL CREATE DATABASE fashion_shop"
+
+volumes:
+  mssqldata:

@@ -1,0 +1,680 @@
+// =====================================================================
+// Prisma schema - Fashion E-commerce & Business Management System
+// Database: SQL Server 2022. Kien truc: Modular Monolith (MVP: 1 cua hang, 1 kho).
+//
+// Quy uoc (da chuyen tu PostgreSQL sang SQL Server):
+//  - Ten bang: snake_case so nhieu (@@map). Ten cot: camelCase.
+//  - Id: UniqueIdentifier (UUID). Thoi gian: DateTime2 (luu gio UTC).
+//  - Tien te: Decimal(14,2) - KHONG dung Float. So luong hang: Int.
+//  - SQL Server + Prisma KHONG ho tro enum va Json:
+//      * "enum" duoc luu bang String; gia tri hop le duoc chan bang CHECK
+//        trong prisma/sql/constraints.sql va khai bao o src/domain/enums.ts.
+//      * Cot Json duoc luu bang NVarChar(Max) (chuoi JSON).
+//  - SQL Server chi cho 1 gia tri NULL trong cot UNIQUE. Cac cot co the NULL
+//    nhung phai duy nhat (idempotencyKey, ...) KHONG khai bao @unique o day,
+//    ma dung filtered unique index (WHERE ... IS NOT NULL) trong constraints.sql.
+//  - onDelete: dung NoAction (SQL Server khong co Restrict va canh bao
+//    nhieu duong xoa day chuyen). Chi Cascade cho dong phu thuoc thuan tuy.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// IDENTITY & ACCESS
+// ---------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid()) @db.UniqueIdentifier
+  email        String   @unique @db.NVarChar(255)
+  passwordHash String   @db.NVarChar(255)
+  fullName     String   @db.NVarChar(255)
+  status       String   @default("ACTIVE") @db.NVarChar(20) // UserStatus: ACTIVE | DISABLED
+  createdAt    DateTime @default(now()) @db.DateTime2
+  updatedAt    DateTime @updatedAt @db.DateTime2
+
+  userRoles   UserRole[]
+  customers   Customer[]
+  posSessions PosSession[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  code      String   @unique @db.NVarChar(50) // ADMIN, MANAGER, SALES_STAFF, WAREHOUSE_STAFF, CUSTOMER
+  name      String   @db.NVarChar(255)
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.UniqueIdentifier
+  code        String   @unique @db.NVarChar(100) // vd: product.write, inventory.adjust
+  description String?  @db.NVarChar(500)
+  createdAt   DateTime @default(now()) @db.DateTime2
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @db.UniqueIdentifier
+  roleId String @db.UniqueIdentifier
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @db.UniqueIdentifier
+  permissionId String @db.UniqueIdentifier
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------
+// PRODUCT & CATALOG
+// ---------------------------------------------------------------------
+
+model Category {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  name      String   @db.NVarChar(255)
+  slug      String   @unique @db.NVarChar(255)
+  parentId  String?  @db.UniqueIdentifier
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Brand {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  name      String   @unique @db.NVarChar(255)
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  products Product[]
+
+  @@map("brands")
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.UniqueIdentifier
+  name        String   @db.NVarChar(255)
+  slug        String   @unique @db.NVarChar(255)
+  description String?  @db.NVarChar(Max)
+  categoryId  String   @db.UniqueIdentifier
+  brandId     String?  @db.UniqueIdentifier
+  status      String   @default("DRAFT") @db.NVarChar(20) // ProductStatus: DRAFT | ACTIVE | ARCHIVED
+  createdAt   DateTime @default(now()) @db.DateTime2
+  updatedAt   DateTime @updatedAt @db.DateTime2
+
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  brand    Brand?           @relation(fields: [brandId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variants ProductVariant[]
+  images   ProductImage[]
+
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String   @id @default(uuid()) @db.UniqueIdentifier
+  productId  String   @db.UniqueIdentifier
+  sku        String   @unique @db.NVarChar(100)
+  color      String?  @db.NVarChar(100)
+  size       String?  @db.NVarChar(50)
+  attributes String?  @db.NVarChar(Max) // chuoi JSON
+  price      Decimal  @db.Decimal(14, 2) // gia ban, backend xac thuc
+  status     String   @default("ACTIVE") @db.NVarChar(20) // ProductStatus
+  createdAt  DateTime @default(now()) @db.DateTime2
+  updatedAt  DateTime @updatedAt @db.DateTime2
+
+  product          Product                @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orderItems       OrderItem[]
+  balances         InventoryBalance[]
+  movementItems    StockMovementItem[]
+  reservationItems StockReservationItem[]
+  costLayers       InventoryCostLayer[]
+  poItems          PurchaseOrderItem[]
+  receiptItems     GoodsReceiptItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  productId String   @db.UniqueIdentifier
+  url       String   @db.NVarChar(1000)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ---------------------------------------------------------------------
+// CUSTOMER
+// ---------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  // null neu la khach mua tai quay khong co tai khoan.
+  // Duy nhat khi co gia tri: filtered unique index trong constraints.sql
+  userId    String?  @db.UniqueIdentifier
+  fullName  String   @db.NVarChar(255)
+  email     String?  @db.NVarChar(255)
+  phone     String?  @db.NVarChar(30)
+  createdAt DateTime @default(now()) @db.DateTime2
+  updatedAt DateTime @updatedAt @db.DateTime2
+
+  user      User?             @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  addresses CustomerAddress[]
+  orders    Order[]
+
+  @@index([userId])
+  @@index([phone])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id         String   @id @default(uuid()) @db.UniqueIdentifier
+  customerId String   @db.UniqueIdentifier
+  receiver   String   @db.NVarChar(255)
+  phone      String   @db.NVarChar(30)
+  line1      String   @db.NVarChar(500)
+  ward       String?  @db.NVarChar(255)
+  district   String?  @db.NVarChar(255)
+  city       String   @db.NVarChar(255)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @db.DateTime2
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+// ---------------------------------------------------------------------
+// ORDERS
+// ---------------------------------------------------------------------
+
+model Order {
+  id              String    @id @default(uuid()) @db.UniqueIdentifier
+  orderCode       String    @unique @db.NVarChar(50)
+  channel         String    @db.NVarChar(20) // OrderChannel: ONLINE | POS
+  customerId      String?   @db.UniqueIdentifier
+  status          String    @default("PENDING") @db.NVarChar(20) // OrderStatus
+  paymentMethod   String    @db.NVarChar(20) // PaymentMethod: COD | CASH | ONLINE
+  paymentStatus   String    @default("UNPAID") @db.NVarChar(30) // PaymentStatus (doc lap voi status)
+  subtotal        Decimal   @db.Decimal(14, 2)
+  discountTotal   Decimal   @default(0) @db.Decimal(14, 2)
+  shippingFee     Decimal   @default(0) @db.Decimal(14, 2)
+  total           Decimal   @db.Decimal(14, 2)
+  // Chong tao don trung (idempotency). Duy nhat khi khac NULL: filtered unique index.
+  idempotencyKey  String?   @db.NVarChar(255)
+  posSessionId    String?   @db.UniqueIdentifier
+  createdByUserId String?   @db.UniqueIdentifier
+  createdAt       DateTime  @default(now()) @db.DateTime2
+  updatedAt       DateTime  @updatedAt @db.DateTime2
+  completedAt     DateTime? @db.DateTime2
+
+  customer    Customer?         @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  posSession  PosSession?       @relation(fields: [posSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items       OrderItem[]
+  reservation StockReservation?
+  payments    Payment[]
+  shipments   Shipment[]
+  returns     ReturnRequest[]
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.UniqueIdentifier
+  orderId        String  @db.UniqueIdentifier
+  variantId      String  @db.UniqueIdentifier
+  skuSnapshot    String  @db.NVarChar(100)
+  nameSnapshot   String  @db.NVarChar(255)
+  quantity       Int
+  unitPrice      Decimal @db.Decimal(14, 2) // gia ban snapshot tai thoi diem dat
+  discountAmount Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal      Decimal @db.Decimal(14, 2)
+  // Gia von KHONG luu o day; lay tu cost_layer_allocations (FIFO)
+
+  order       Order                 @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant     ProductVariant        @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allocations CostLayerAllocation[]
+  returnItems ReturnItem[]
+
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------
+// INVENTORY
+// ---------------------------------------------------------------------
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  code      String   @unique @db.NVarChar(50)
+  name      String   @db.NVarChar(255)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  balances     InventoryBalance[]
+  movements    StockMovement[]
+  reservations StockReservation[]
+  costLayers   InventoryCostLayer[]
+  receipts     GoodsReceipt[]
+  posSessions  PosSession[]
+
+  @@map("warehouses")
+}
+
+// Available = onHand - reserved
+model InventoryBalance {
+  id          String   @id @default(uuid()) @db.UniqueIdentifier
+  warehouseId String   @db.UniqueIdentifier
+  variantId   String   @db.UniqueIdentifier
+  onHand      Int      @default(0)
+  reserved    Int      @default(0)
+  updatedAt   DateTime @updatedAt @db.DateTime2
+
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([warehouseId, variantId])
+  @@map("inventory_balances")
+}
+
+model StockMovement {
+  id              String   @id @default(uuid()) @db.UniqueIdentifier
+  warehouseId     String   @db.UniqueIdentifier
+  type            String   @db.NVarChar(30) // StockMovementType: RECEIPT | SALE | RETURN_RESTOCK | ADJUSTMENT
+  referenceType   String?  @db.NVarChar(50) // vd: ORDER, GOODS_RECEIPT, RETURN
+  referenceId     String?  @db.NVarChar(100)
+  note            String?  @db.NVarChar(500)
+  createdByUserId String?  @db.UniqueIdentifier
+  createdAt       DateTime @default(now()) @db.DateTime2
+
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items     StockMovementItem[]
+
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+model StockMovementItem {
+  id             String   @id @default(uuid()) @db.UniqueIdentifier
+  movementId     String   @db.UniqueIdentifier
+  variantId      String   @db.UniqueIdentifier
+  quantityChange Int // duong = nhap, am = xuat
+  onHandAfter    Int
+  createdAt      DateTime @default(now()) @db.DateTime2
+
+  movement    StockMovement         @relation(fields: [movementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant     ProductVariant        @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allocations CostLayerAllocation[]
+
+  @@index([variantId, createdAt])
+  @@index([movementId])
+  @@map("stock_movement_items")
+}
+
+// ---------------------------------------------------------------------
+// RESERVATIONS (Timed Reservation)
+// ---------------------------------------------------------------------
+
+model StockReservation {
+  id          String    @id @default(uuid()) @db.UniqueIdentifier
+  orderId     String    @unique @db.UniqueIdentifier
+  warehouseId String    @db.UniqueIdentifier
+  status      String    @default("ACTIVE") @db.NVarChar(20) // ReservationStatus: ACTIVE | CONVERTED | RELEASED | EXPIRED
+  expiresAt   DateTime  @db.DateTime2 // = thoi diem tao + settings reservation.hold_seconds (30)
+  releasedAt  DateTime? @db.DateTime2
+  createdAt   DateTime  @default(now()) @db.DateTime2
+  updatedAt   DateTime  @updatedAt @db.DateTime2
+
+  order     Order                  @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse Warehouse              @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items     StockReservationItem[]
+
+  @@index([status, expiresAt])
+  @@map("stock_reservations")
+}
+
+model StockReservationItem {
+  id            String @id @default(uuid()) @db.UniqueIdentifier
+  reservationId String @db.UniqueIdentifier
+  variantId     String @db.UniqueIdentifier
+  quantity      Int
+
+  reservation StockReservation @relation(fields: [reservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant     ProductVariant   @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([reservationId, variantId])
+  @@map("stock_reservation_items")
+}
+
+// ---------------------------------------------------------------------
+// FIFO COSTING
+// ---------------------------------------------------------------------
+
+model InventoryCostLayer {
+  id                 String   @id @default(uuid()) @db.UniqueIdentifier
+  warehouseId        String   @db.UniqueIdentifier
+  variantId          String   @db.UniqueIdentifier
+  // Moi dong nhan hang tao toi da 1 lop: filtered unique index (WHERE NOT NULL)
+  goodsReceiptItemId String?  @db.UniqueIdentifier
+  receivedQuantity   Int
+  remainingQuantity  Int
+  unitCost           Decimal  @db.Decimal(14, 2)
+  receivedAt         DateTime @db.DateTime2
+  createdAt          DateTime @default(now()) @db.DateTime2
+
+  warehouse   Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant     ProductVariant        @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receiptItem GoodsReceiptItem?     @relation(fields: [goodsReceiptItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allocations CostLayerAllocation[]
+
+  // Truy van FIFO: lop cu nhat con hang theo kho + SKU
+  @@index([warehouseId, variantId, receivedAt])
+  @@index([goodsReceiptItemId])
+  @@map("inventory_cost_layers")
+}
+
+model CostLayerAllocation {
+  id                  String   @id @default(uuid()) @db.UniqueIdentifier
+  costLayerId         String   @db.UniqueIdentifier
+  orderItemId         String?  @db.UniqueIdentifier
+  stockMovementItemId String?  @db.UniqueIdentifier
+  quantity            Int
+  unitCost            Decimal  @db.Decimal(14, 2) // snapshot, khong tinh lai
+  totalCost           Decimal  @db.Decimal(14, 2)
+  createdAt           DateTime @default(now()) @db.DateTime2
+
+  costLayer         InventoryCostLayer @relation(fields: [costLayerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orderItem         OrderItem?         @relation(fields: [orderItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stockMovementItem StockMovementItem? @relation(fields: [stockMovementItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([costLayerId])
+  @@index([orderItemId])
+  @@map("cost_layer_allocations")
+}
+
+// ---------------------------------------------------------------------
+// PURCHASING
+// ---------------------------------------------------------------------
+
+model Supplier {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  name      String   @db.NVarChar(255)
+  phone     String?  @db.NVarChar(30)
+  email     String?  @db.NVarChar(255)
+  address   String?  @db.NVarChar(500)
+  createdAt DateTime @default(now()) @db.DateTime2
+  updatedAt DateTime @updatedAt @db.DateTime2
+
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id              String    @id @default(uuid()) @db.UniqueIdentifier
+  poCode          String    @unique @db.NVarChar(50)
+  supplierId      String    @db.UniqueIdentifier
+  status          String    @default("DRAFT") @db.NVarChar(30) // PurchaseOrderStatus
+  expectedDate    DateTime? @db.DateTime2
+  createdByUserId String?   @db.UniqueIdentifier
+  createdAt       DateTime  @default(now()) @db.DateTime2
+  updatedAt       DateTime  @updatedAt @db.DateTime2
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items    PurchaseOrderItem[]
+  receipts GoodsReceipt[]
+
+  @@index([supplierId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String  @id @default(uuid()) @db.UniqueIdentifier
+  purchaseOrderId  String  @db.UniqueIdentifier
+  variantId        String  @db.UniqueIdentifier
+  orderedQuantity  Int
+  expectedUnitCost Decimal @db.Decimal(14, 2) // gia du kien, KHONG phai gia von
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant       ProductVariant     @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receiptItems  GoodsReceiptItem[]
+
+  @@unique([purchaseOrderId, variantId])
+  @@map("purchase_order_items")
+}
+
+model GoodsReceipt {
+  id               String   @id @default(uuid()) @db.UniqueIdentifier
+  receiptCode      String   @unique @db.NVarChar(50)
+  purchaseOrderId  String   @db.UniqueIdentifier
+  warehouseId      String   @db.UniqueIdentifier
+  // Chong xac nhan nhan hang lap. Duy nhat khi khac NULL: filtered unique index.
+  idempotencyKey   String?  @db.NVarChar(255)
+  receivedByUserId String?  @db.UniqueIdentifier
+  receivedAt       DateTime @db.DateTime2
+  createdAt        DateTime @default(now()) @db.DateTime2
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items         GoodsReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id                  String  @id @default(uuid()) @db.UniqueIdentifier
+  goodsReceiptId      String  @db.UniqueIdentifier
+  purchaseOrderItemId String  @db.UniqueIdentifier
+  variantId           String  @db.UniqueIdentifier
+  receivedQuantity    Int
+  actualUnitCost      Decimal @db.Decimal(14, 2) // gia nhap thuc te -> gia von FIFO
+
+  goodsReceipt      GoodsReceipt         @relation(fields: [goodsReceiptId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchaseOrderItem PurchaseOrderItem    @relation(fields: [purchaseOrderItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant           ProductVariant       @relation(fields: [variantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  costLayers        InventoryCostLayer[] // toi da 1 lop / dong (rang buoc bang filtered unique index)
+
+  @@index([goodsReceiptId])
+  @@map("goods_receipt_items")
+}
+
+// ---------------------------------------------------------------------
+// PAYMENTS
+// ---------------------------------------------------------------------
+
+model Payment {
+  id                    String    @id @default(uuid()) @db.UniqueIdentifier
+  orderId               String    @db.UniqueIdentifier
+  method                String    @db.NVarChar(20) // PaymentMethod
+  status                String    @default("PENDING") @db.NVarChar(30) // PaymentStatus
+  amount                Decimal   @db.Decimal(14, 2)
+  provider              String?   @db.NVarChar(100) // cong thanh toan: chua chon (PENDING)
+  providerTransactionId String?   @db.NVarChar(255)
+  // Duy nhat khi khac NULL: filtered unique index.
+  idempotencyKey        String?   @db.NVarChar(255)
+  paidAt                DateTime? @db.DateTime2
+  createdAt             DateTime  @default(now()) @db.DateTime2
+  updatedAt             DateTime  @updatedAt @db.DateTime2
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refunds Refund[]
+
+  @@index([orderId, status])
+  @@map("payments")
+}
+
+model Refund {
+  id              String   @id @default(uuid()) @db.UniqueIdentifier
+  paymentId       String   @db.UniqueIdentifier
+  returnRequestId String?  @db.UniqueIdentifier
+  amount          Decimal  @db.Decimal(14, 2)
+  status          String   @default("PENDING") @db.NVarChar(20) // RefundStatus: PENDING | COMPLETED | FAILED
+  reason          String?  @db.NVarChar(500)
+  createdAt       DateTime @default(now()) @db.DateTime2
+  updatedAt       DateTime @updatedAt @db.DateTime2
+
+  payment       Payment        @relation(fields: [paymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  returnRequest ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+model PaymentWebhookEvent {
+  id              String    @id @default(uuid()) @db.UniqueIdentifier
+  provider        String    @db.NVarChar(100)
+  providerEventId String    @db.NVarChar(255)
+  payload         String    @db.NVarChar(Max) // chuoi JSON
+  processedAt     DateTime? @db.DateTime2
+  createdAt       DateTime  @default(now()) @db.DateTime2
+
+  // Webhook gui lap: cung (provider, event id) chi duoc xu ly 1 lan
+  @@unique([provider, providerEventId])
+  @@map("payment_webhook_events")
+}
+
+// ---------------------------------------------------------------------
+// SHIPPING
+// ---------------------------------------------------------------------
+
+model Shipment {
+  id           String    @id @default(uuid()) @db.UniqueIdentifier
+  orderId      String    @db.UniqueIdentifier
+  carrier      String?   @db.NVarChar(100) // don vi van chuyen: chua chon (PENDING)
+  trackingCode String?   @db.NVarChar(100)
+  status       String    @default("PENDING") @db.NVarChar(20) // ShipmentStatus
+  shippingFee  Decimal   @default(0) @db.Decimal(14, 2)
+  shippedAt    DateTime? @db.DateTime2
+  deliveredAt  DateTime? @db.DateTime2
+  createdAt    DateTime  @default(now()) @db.DateTime2
+  updatedAt    DateTime  @updatedAt @db.DateTime2
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([orderId])
+  @@map("shipments")
+}
+
+// ---------------------------------------------------------------------
+// RETURNS
+// ---------------------------------------------------------------------
+
+model ReturnRequest {
+  id          String   @id @default(uuid()) @db.UniqueIdentifier
+  orderId     String   @db.UniqueIdentifier
+  status      String   @default("REQUESTED") @db.NVarChar(20) // ReturnStatus
+  reason      String?  @db.NVarChar(500)
+  requestedAt DateTime @default(now()) @db.DateTime2
+  updatedAt   DateTime @updatedAt @db.DateTime2
+
+  order   Order        @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items   ReturnItem[]
+  refunds Refund[]
+
+  @@index([orderId])
+  @@map("return_requests")
+}
+
+model ReturnItem {
+  id              String @id @default(uuid()) @db.UniqueIdentifier
+  returnRequestId String @db.UniqueIdentifier
+  orderItemId     String @db.UniqueIdentifier
+  quantity        Int
+  condition       String @default("PENDING_INSPECTION") @db.NVarChar(30) // ReturnCondition
+
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orderItem     OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([returnRequestId])
+  @@map("return_items")
+}
+
+// ---------------------------------------------------------------------
+// POS
+// ---------------------------------------------------------------------
+
+model PosSession {
+  id          String    @id @default(uuid()) @db.UniqueIdentifier
+  userId      String    @db.UniqueIdentifier
+  warehouseId String    @db.UniqueIdentifier
+  openingCash Decimal   @default(0) @db.Decimal(14, 2)
+  closingCash Decimal?  @db.Decimal(14, 2)
+  openedAt    DateTime  @default(now()) @db.DateTime2
+  closedAt    DateTime? @db.DateTime2
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders    Order[]
+
+  @@index([userId, openedAt])
+  @@map("pos_sessions")
+}
+
+// ---------------------------------------------------------------------
+// SYSTEM
+// ---------------------------------------------------------------------
+
+// Cau hinh he thong (vd: reservation.hold_seconds = 30). KHONG hardcode trong code.
+model Setting {
+  key       String   @id @db.NVarChar(255)
+  value     String   @db.NVarChar(1000)
+  updatedAt DateTime @updatedAt @db.DateTime2
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.UniqueIdentifier
+  userId     String?  @db.UniqueIdentifier
+  action     String   @db.NVarChar(100)
+  entityType String   @db.NVarChar(100)
+  entityId   String?  @db.NVarChar(100)
+  metadata   String?  @db.NVarChar(Max) // chuoi JSON
+  createdAt  DateTime @default(now()) @db.DateTime2
+
+  user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
