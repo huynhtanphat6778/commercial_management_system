@@ -22,7 +22,7 @@ const products: Product[] = [
     price: 890000,
     description:
       'Phom áo thoáng nhẹ, đường may tối giản và chất linen mềm dành cho những ngày nắng dịu.',
-    artworkColor: '#ded4c0',
+    artworkColor: '#CFB291',
     tag: 'BÁN CHẠY',
     variants: [
       { id: 'v-linen-white-s', color: 'Trắng ngà', size: 'S', sku: 'LN-WH-S', inStock: true },
@@ -38,7 +38,7 @@ const products: Product[] = [
     price: 1290000,
     description:
       'Đầm midi chuyển động mềm mại, có thể mặc đi làm hoặc dạo phố cuối tuần.',
-    artworkColor: '#d7c8b7',
+    artworkColor: '#E7D7C2',
     tag: 'MỚI',
     variants: [
       { id: 'v-midi-sand-s', color: 'Cát', size: 'S', sku: 'MD-SA-S', inStock: true },
@@ -53,7 +53,7 @@ const products: Product[] = [
     price: 1090000,
     description:
       'Cạp cao vừa vặn, ống suông thanh lịch và dễ phối cùng các thiết kế cơ bản.',
-    artworkColor: '#c5c6b5',
+    artworkColor: '#F5F5DC',
     variants: [
       { id: 'v-trouser-stone-s', color: 'Đá', size: 'S', sku: 'TR-ST-S', inStock: true },
       { id: 'v-trouser-stone-m', color: 'Đá', size: 'M', sku: 'TR-ST-M', inStock: true },
@@ -67,7 +67,7 @@ const products: Product[] = [
     price: 1590000,
     description:
       'Lớp áo khoác mỏng với sắc xanh trầm, hoàn thiện cho những ngày giao mùa.',
-    artworkColor: '#aeb8a6',
+    artworkColor: '#95725A',
     variants: [
       { id: 'v-overshirt-forest-m', color: 'Rêu', size: 'M', sku: 'OS-FR-M', inStock: true },
       { id: 'v-overshirt-forest-l', color: 'Rêu', size: 'L', sku: 'OS-FR-L', inStock: true },

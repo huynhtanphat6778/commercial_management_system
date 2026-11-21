@@ -117,6 +117,14 @@ function App() {
       </header>
 
       {workspace === 'store' && (
+        <div className="announcement-bar" role="note">
+          <span className="announcement-bar__label">MỘC ATELIER · BST 26</span>
+          <span>Những thiết kế tinh giản để mặc mỗi ngày</span>
+          <span aria-hidden="true">✦</span>
+        </div>
+      )}
+
+      {workspace === 'store' && (
         <StoreWorkspace
           page={storePage}
           setPage={setStorePage}
@@ -213,7 +221,7 @@ function CatalogPage({ onSelect }: { onSelect: (id: string) => void }) {
           <p className="eyebrow">MỘC ATELIER · BỘ SƯU TẬP 26</p>
           <h1 className="display-title">Mặc điều<br /><em>mình thích.</em></h1>
           <p>Thiết kế tinh giản, chất liệu dễ chịu — để mỗi ngày đều có một chút dịu dàng.</p>
-          <a className="text-link" href="#catalog">Khám phá bộ sưu tập <span aria-hidden="true">↘</span></a>
+          <a className="button button--primary hero-cta" href="#catalog">Khám phá bộ sưu tập <span aria-hidden="true">↘</span></a>
         </div>
         <div className="editorial-hero__art" aria-hidden="true">
           <div className="hero-arch">
@@ -223,7 +231,7 @@ function CatalogPage({ onSelect }: { onSelect: (id: string) => void }) {
               <span className="hero-figure__legs" />
             </div>
           </div>
-          <div className="hero-sticker">MẶC<br />CHẬM<br />MỘT CHÚT</div>
+          <div className="hero-sticker">CHẤT LIỆU<br />MỀM MẠI</div>
           <span className="hero-index">01 — 04 / DAILY UNIFORM</span>
         </div>
       </section>

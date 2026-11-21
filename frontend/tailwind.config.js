@@ -3,12 +3,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        canvas: '#f5f2eb',
-        ink: '#211d1a',
-        wine: '#5d2635',
-        moss: '#5f6b55',
-        acid: '#d9f36a',
-        line: '#ded9ce',
+        canvas: '#FCFCF6',
+        ink: '#5A3122',
+        cocoa: '#5A3122',
+        clay: '#95725A',
+        tan: '#CFB291',
+        cream: '#F5F5DC',
+        line: '#E6DDCF',
       },
       fontFamily: {
         sans: ['Inter', 'Arial', 'sans-serif'],

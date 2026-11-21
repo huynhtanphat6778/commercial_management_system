@@ -2,24 +2,24 @@
 
 ## Hướng thẩm mỹ
 
-Một cửa hàng thời trang tối giản, ấm và có chất biên tập: nền giấy ngà, kiểu chữ serif cho tiêu đề, đường kẻ mảnh như lookbook; màu rượu vang và xanh rêu tạo điểm nhấn. Tránh cảm giác dashboard mẫu bằng bố cục bất đối xứng, khoảng trắng rộng và hình minh họa trang phục dựng bằng CSS (không phụ thuộc ảnh bên ngoài).
+Một cửa hàng thời trang tinh tế và ấm cúng: nền ivory, nâu cacao, nâu đất và beige. Trang chủ dùng điều hướng mảnh, một dải thông điệp ngắn và hero căn giữa theo tinh thần lookbook/editorial — lấy bố cục thoáng của ảnh tham khảo làm cảm hứng, không sao chép nhận diện hay nội dung. Tiêu đề serif tạo cảm giác thủ công; CTA mềm, bo tròn và hình minh họa sản phẩm dùng các tông đất.
 
 ## Token giao diện
 
 | Token | Giá trị | Dùng cho |
 |---|---|---|
-| `canvas` / `--paper` | `#F5F2EB` | Nền chung |
-| `ink` / `--ink` | `#211D1A` | Chữ chính |
-| `wine` / `--wine` | `#5D2635` | CTA chính, tiêu đề nhấn |
-| `moss` / `--moss` | `#5F6B55` | Trạng thái tốt, nhãn nhỏ |
-| `acid` / `--acid` | `#D9F36A` | Điểm nhấn biên tập |
-| `line` / `--line` | `#DED9CE` | Viền và phân cách |
-| `danger` / `--danger` | `#9C3C39` | Lỗi / hết hàng |
+| `cocoa` / `--ink` | `#5A3122` | Chữ chính, CTA |
+| `clay` | `#95725A` | Màu đất, điều hướng phụ |
+| `tan` / `--acid` | `#CFB291` | Điểm nhấn và minh họa |
+| `cream` / `--paper-deep` | `#F5F5DC` | Nền hero và bề mặt phụ |
+| `ivory` / `--paper` | `#FCFCF6` | Nền trang |
+| `line` / `--line` | `#E6DDCF` | Viền và phân cách |
+| `danger` / `--danger` | `#8D3E34` | Lỗi / hết hàng |
 
 - Chữ nội dung: system sans-serif, tối thiểu 12px ở các nhãn thao tác.
 - Chữ tiêu đề: Georgia/serif, dùng cho cảm giác tạp chí thời trang.
 - Thang khoảng cách cơ bản: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64px.
-- Bo góc nhỏ, ưu tiên đường viền và màu nền thay cho bóng đổ.
+- Bo góc nhẹ cho nút và thẻ; ưu tiên đường viền, sắc độ nền thay cho bóng đổ nặng.
 - Bố cục khách hàng ưu tiên mobile; POS/Admin dùng bảng và vùng thao tác rộng trên desktop/tablet.
 
 ## Component dùng chung
