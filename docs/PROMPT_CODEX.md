@@ -33,7 +33,7 @@ Việc làm ngay (Task 3 - xác thực database, schema CHƯA từng chạy trê
 5. npm test phải đạt hoàn toàn. Commit migration.
 
 Sau đó làm tuần tự Task 5, 6, 7, ... theo docs/TASKS_CODEX.md, mỗi task một nhánh git
-codex/task-<số>-<tên> và một pull request. Không bỏ task, không làm task sau khi task trước chưa đạt tiêu chí.
+codex/task-<tên> (ví dụ codex/task-auth, codex/task-products) và một pull request. Không bỏ task, không làm task sau khi task trước chưa đạt tiêu chí.
 
 Quy tắc báo cáo: sau mỗi task nêu file tạo/sửa, quyết định mới, test đã chạy và kết quả thật.
 Không được tuyên bố xong nếu chưa chạy test. Cập nhật docs/API.md (method, URL, quyền, request, response, lỗi)
